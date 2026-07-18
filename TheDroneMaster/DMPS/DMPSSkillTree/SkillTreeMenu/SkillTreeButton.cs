@@ -47,7 +47,7 @@ namespace TheDroneMaster.DMPS.DMPSSkillTree.SkillTreeMenu
         public bool MouseOver => IsMouseOverMe;
         public Menu.Menu GetMenu => menu;
 
-        public virtual bool IsMouseOverMe => Custom.DistLess(ScreenPos, menu.mousePosition, 40f) && !isStatic && setAlpha > 0f;
+        public virtual bool IsMouseOverMe => Custom.DistLess(fixedPos ?? ScreenPos, menu.mousePosition, 40f) && !isStatic && setAlpha > 0f;
         public virtual bool CurrentlySelectableMouse => !buttonBhv.greyedOut && !isStatic && setAlpha > 0f;
         public virtual bool CurrentlySelectableNonMouse => !isStatic && setAlpha > 0f;
 

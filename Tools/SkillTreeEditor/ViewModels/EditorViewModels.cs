@@ -165,6 +165,32 @@ public sealed class RenderNodeVM : BindableBase
         }
     }
     public string NodeType => Model.typeInfo;
+    public bool SupportsExpandOffset => NodeType.Equals("BasicNode", StringComparison.OrdinalIgnoreCase);
+
+    public float ExpandOffsetX
+    {
+        get => Model.expandOffset?.X ?? 0f;
+        set
+        {
+            Model.expandOffset ??= new Vec2();
+            Model.expandOffset.X = value;
+            RaisePropertyChanged(nameof(ExpandOffsetX));
+            PositionChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public float ExpandOffsetY
+    {
+        get => Model.expandOffset?.Y ?? 0f;
+        set
+        {
+            Model.expandOffset ??= new Vec2();
+            Model.expandOffset.Y = value;
+            RaisePropertyChanged(nameof(ExpandOffsetY));
+            PositionChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     public int Layer
     {
         get => Model.layer;

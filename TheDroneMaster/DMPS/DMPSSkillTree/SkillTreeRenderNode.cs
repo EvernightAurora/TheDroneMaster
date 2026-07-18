@@ -20,6 +20,7 @@ namespace TheDroneMaster.DMPS.DMPSSkillTree
         public int layer;
 
         public SkillTreeRenderNodeExtCondition[] extConditions;
+        public Vector2? expandOffset;
     }
 
     internal struct SkillTreeRenderNodeExtCondition

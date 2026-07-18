@@ -272,6 +272,10 @@
 
                         <!-- 独立选中范围覆盖层：不参与节点模板布局，也不拦截鼠标 -->
                         <Canvas Width="1600" Height="1100" IsHitTestVisible="False" ClipToBounds="False" Panel.ZIndex="40">
+                            <Polygon x:Name="SelectedBasicExpandScreenRange"
+                                     Stroke="#29B6F6" StrokeThickness="2"
+                                     Fill="#1029B6F6" Opacity="0.95"
+                                     Visibility="Collapsed"/>
                             <Polygon x:Name="SelectedNodeGameRange"
                                      Stroke="#FFFFFF" StrokeThickness="1.5"
                                      Fill="#08FFFFFF" Opacity="0.95"
@@ -336,13 +340,41 @@
                                 <WrapPanel>
                                     <StackPanel Width="160">
                                         <TextBlock Text="X"/>
-                                        <TextBox Text="{Binding SelectedNode.GameX}" Margin="0,2,10,0"/>
+                                        <TextBox Text="{Binding SelectedNode.GameX, Mode=TwoWay}"
+                                                 KeyDown="PositionTextBox_KeyDown" Margin="0,2,10,0"/>
                                     </StackPanel>
                                     <StackPanel Width="160">
                                         <TextBlock Text="Y"/>
-                                        <TextBox Text="{Binding SelectedNode.GameY}" Margin="0,2,0,0"/>
+                                        <TextBox Text="{Binding SelectedNode.GameY, Mode=TwoWay}"
+                                                 KeyDown="PositionTextBox_KeyDown" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </WrapPanel>
+
+                                <StackPanel Margin="0,12,0,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedNode.NodeType}" Value="BasicNode">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="expandOffset（展开后 pages[0].pos）" Foreground="#55C8FF" FontWeight="SemiBold"/>
+                                    <TextBlock Text="以此坐标为屏幕左下角，蓝色框表示 1366 × 768 的可视范围。"
+                                               Foreground="#888888" FontSize="11" Margin="0,2,0,5" TextWrapping="Wrap"/>
+                                    <WrapPanel>
+                                        <StackPanel Width="160">
+                                            <TextBlock Text="X"/>
+                                            <TextBox Text="{Binding SelectedNode.ExpandOffsetX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,10,0"/>
+                                        </StackPanel>
+                                        <StackPanel Width="160">
+                                            <TextBlock Text="Y"/>
+                                            <TextBox Text="{Binding SelectedNode.ExpandOffsetY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </StackPanel>
 
                                 <StackPanel x:Name="LineExtConditionsPanel" Margin="0,12,0,0">
                                     <StackPanel.Style>

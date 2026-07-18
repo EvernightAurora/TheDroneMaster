@@ -47,7 +47,7 @@ namespace TheDroneMaster.DMPS.DMPSSkillTree.SkillTreeMenu.MenuAnim
             menu.bkgEff.extraAlpha = Mathf.Sin(Mathf.PI * focusingAnimProg);
 
             menu.escButton.SetAlpha(t);
-            menu.pages[0].pos = Vector2.Lerp(menu.middleScreen, Vector2.zero, t);
+            menu.pages[0].pos = Vector2.Lerp(menu.middleScreen, -RenderNodeLoader.idMapper[menu.focusingSkillTreeCatagory].expandOffset.GetValueOrDefault(), t);
 
             if (progression < 0.25f)
                 menu.layerPulseRads[2] = (1f - progression / 0.25f) * 2000f;

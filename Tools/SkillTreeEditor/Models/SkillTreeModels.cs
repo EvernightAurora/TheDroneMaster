@@ -42,6 +42,9 @@ public sealed class SkillTreeRenderNode
 
     public List<SkillTreeRenderNodeExtCondition>? extConditions { get; set; }
 
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public Vec2? expandOffset { get; set; }
+
     // editor only
     [JsonIgnore]
     public string? __sourceIndexFile { get; set; }

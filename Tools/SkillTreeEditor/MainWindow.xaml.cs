@@ -564,6 +564,8 @@ public partial class MainWindow : Window
 
     private void RefreshSelectedNodeGameRange()
     {
+        RefreshSelectedBasicExpandScreenRange();
+
         if (SelectedNodeGameRange == null || _vm.SelectedNode == null || !_vm.SelectedNode.IsVisible)
         {
             if (SelectedNodeGameRange != null)
@@ -601,6 +603,48 @@ public partial class MainWindow : Window
         SelectedNodeGameRange.Visibility = Visibility.Visible;
     }
 
+    private void RefreshSelectedBasicExpandScreenRange()
+    {
+        if (SelectedBasicExpandScreenRange == null)
+            return;
+
+        double left;
+        double bottom;
+
+        if (_vm.ViewMode == LayoutViewMode.Fold)
+        {
+            // Fold 总览以游戏坐标 (0,0) 为屏幕中心。
+            left = -1366.0 / 2.0;
+            bottom = -768.0 / 2.0;
+        }
+        else if (_vm.SelectedNode != null &&
+                 _vm.SelectedNode.IsVisible &&
+                 _vm.SelectedNode.NodeType.Equals("BasicNode", StringComparison.OrdinalIgnoreCase))
+        {
+            // Expand 仅在直接选中 BasicNode 时显示其专属页面范围。
+            left = _vm.SelectedNode.ExpandOffsetX;
+            bottom = _vm.SelectedNode.ExpandOffsetY;
+        }
+        else
+        {
+            SelectedBasicExpandScreenRange.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        Point ToCanvas(double gameX, double gameY) => new(
+            RenderNodeVM.CanvasCenterX + _vm.PanX + gameX * _vm.Zoom,
+            RenderNodeVM.CanvasCenterY + _vm.PanY - gameY * _vm.Zoom);
+
+        SelectedBasicExpandScreenRange.Points = new PointCollection
+        {
+            ToCanvas(left, bottom),
+            ToCanvas(left + 1366.0, bottom),
+            ToCanvas(left + 1366.0, bottom + 768.0),
+            ToCanvas(left, bottom + 768.0)
+        };
+        SelectedBasicExpandScreenRange.Visibility = Visibility.Visible;
+    }
+
     private void RefreshAxes()
     {
         if (CenterVerticalLine == null || CenterHorizontalLine == null)
@@ -614,6 +658,17 @@ public partial class MainWindow : Window
 
         CenterHorizontalLine.Y1 = centerY;
         CenterHorizontalLine.Y2 = centerY;
+    }
+
+    private void PositionTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not TextBox textBox)
+            return;
+
+        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        RefreshSelectedNodeGameRange();
+        Keyboard.ClearFocus();
+        e.Handled = true;
     }
 
     private void Node_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1049,6 +1104,26 @@ public partial class MainWindow : Window
             node.subRenderNodeInfo?.RemoveAll(id => string.Equals(id, childId, StringComparison.OrdinalIgnoreCase));
     }
 
+    private void PruneMissingChildReferences()
+    {
+        if (_project == null) return;
+
+        var allNodes = _project.IndexFileToNodes.Values.SelectMany(x => x).ToList();
+        var existingIds = new HashSet<string>(
+            allNodes.Where(node => !string.IsNullOrWhiteSpace(node.renderNodeIDInfo))
+                    .Select(node => node.renderNodeIDInfo),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in allNodes)
+        {
+            if (node.subRenderNodeInfo == null) continue;
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            node.subRenderNodeInfo.RemoveAll(id =>
+                string.IsNullOrWhiteSpace(id) || !existingIds.Contains(id) || !seen.Add(id));
+        }
+    }
+
     private bool CanReparent(TreeNodeItemVM? source, TreeNodeItemVM? target)
     {
         if (source?.Model == null || target == null || ReferenceEquals(source, target))
@@ -1209,6 +1284,9 @@ public partial class MainWindow : Window
                 return;
 
             var req = dlg.Result;
+            var nearestBasicParent = req.AttachToSelectedParent
+                ? FindNearestBasicNode(_selectedTreeItem)
+                : null;
 
             var targetIndexPath = _project.IndexFileToNodes.Keys.FirstOrDefault(p =>
                 string.Equals(Path.GetFileName(p), req.TargetIndexFile, StringComparison.OrdinalIgnoreCase));
@@ -1234,6 +1312,8 @@ public partial class MainWindow : Window
             }
 
             var newNode = CreateRenderNodeFromRequest(req, targetIndexPath);
+            if (_vm.ViewMode == LayoutViewMode.Expand && nearestBasicParent != null)
+                ApplyExpandDefaultPosition(newNode, nearestBasicParent);
             _project.IndexFileToNodes[targetIndexPath].Add(newNode);
 
             if (req.AttachToSelectedParent && _selectedTreeItem?.Model != null)
@@ -1343,12 +1423,9 @@ public partial class MainWindow : Window
         // 1) 从 index 文件列表移除节点
         _project.IndexFileToNodes[indexPath].RemoveAll(n => string.Equals(n.renderNodeIDInfo, renderNodeId, StringComparison.OrdinalIgnoreCase));
 
-        // 2) 从所有父节点的 subRenderNodeInfo 移除引用
-        foreach (var n in allRenderNodes)
-        {
-            if (n.subRenderNodeInfo == null) continue;
-            n.subRenderNodeInfo.RemoveAll(id => string.Equals(id, renderNodeId, StringComparison.OrdinalIgnoreCase));
-        }
+        // 2) 从所有父节点的 subRenderNodeInfo 移除引用，并修剪所有历史失效引用。
+        RemoveChildReferenceFromAllNodes(renderNodeId);
+        PruneMissingChildReferences();
 
         // 3) 删除 skill 数据（若存在）
         if (hasSkill)
@@ -1365,8 +1442,15 @@ public partial class MainWindow : Window
             }
         }
 
+        _selectedTreeItem = null;
+        _vm.SelectedNode = null;
+        _vm.SelectedCondition = null;
+        _vm.SelectedPreExtCondition = null;
+        _vm.SelectedShowExtCondition = null;
+        _vm.SelectedHideExtCondition = null;
+        ClearMoveUndo();
         RebuildViewModel();
-        _vm.Status = $"已删除节点：{renderNodeId}";
+        _vm.Status = $"已删除节点并清理失效引用：{renderNodeId}";
     }
 
     private static void DeleteSkillNodeAndFile(SkillTreeProject project, SkillNode skillNode)
@@ -1390,6 +1474,47 @@ public partial class MainWindow : Window
         {
             // ignore
         }
+    }
+
+    private static TreeNodeItemVM? FindNearestBasicNode(TreeNodeItemVM? item)
+    {
+        for (var current = item; current != null; current = current.Parent)
+        {
+            if (current.Model?.typeInfo.Equals("BasicNode", StringComparison.OrdinalIgnoreCase) == true)
+                return current;
+        }
+        return null;
+    }
+
+    private static void ApplyExpandDefaultPosition(SkillTreeRenderNode node, TreeNodeItemVM basicParent)
+    {
+        var offset = basicParent.Model?.expandOffset;
+        var center = new Vec2((offset?.X ?? 0f) + 683f, (offset?.Y ?? 0f) + 384f);
+
+        if (node.typeInfo.Equals("NodeGroup", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (node.typeInfo.Equals("LineNode", StringComparison.OrdinalIgnoreCase))
+        {
+            node.posInfo = new List<Vec2>
+            {
+                new(center.X, center.Y),
+                new(center.X + 100f, center.Y)
+            };
+            return;
+        }
+
+        node.posInfo ??= new List<Vec2>();
+        if (node.typeInfo.Equals("StaticNode", StringComparison.OrdinalIgnoreCase))
+        {
+            if (node.posInfo.Count == 0) node.posInfo.Add(center);
+            else node.posInfo[0] = center;
+            return;
+        }
+
+        while (node.posInfo.Count < 2)
+            node.posInfo.Add(node.posInfo.Count == 0 ? new Vec2() : new Vec2(node.posInfo[0].X, node.posInfo[0].Y));
+        node.posInfo[1] = center;
     }
 
     private static SkillTreeRenderNode CreateRenderNodeFromRequest(AddNodeRequest req, string targetIndexPath)
